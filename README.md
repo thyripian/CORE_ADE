@@ -1,0 +1,2 @@
+# CORE_ADE
+ADE Version of CORE SCOUT
