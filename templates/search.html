@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}CORE Scout - Search{% endblock %}
+
+{% set page_class = "search" %}
+
+{% block content %}
+<div class="page-content">
+    <div class="search-container">
+        {% if not tables %}
+        <div class="table-info">
+            <h4>No Database Loaded</h4>
+            <div class="info-grid">
+                <div class="info-item">
+                    <strong>Status:</strong> No database loaded. Please go to Settings to load a database or Create a
+                    new one.
+                </div>
+                <div class="info-item">
+                    <button onclick="location.reload()" class="refresh-button">
+                        🔄 Retry Connection
+                    </button>
+                </div>
+                <div class="info-item">
+                    <strong>Options:</strong>
+                    <a href="{{ url_for('settings') }}" class="nav-link">Load Database</a> |
+                    <a href="{{ url_for('create') }}" class="nav-link">Create Database</a>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="table-info">
+            <h4>Database Information</h4>
+            <div class="info-grid">
+                <div class="info-item">
+                    <strong>Table:</strong> {{ tables[0].name if tables else 'None' }}
+                </div>
+                <div class="info-item">
+                    <strong>Entries:</strong> {{ "{:,}".format(tables[0].row_count) if tables else 0 }}
+                </div>
+                {% if tables and tables[0].highest_classification and tables[0].highest_classification != "None" %}
+                <div class="info-item">
+                    <strong>Highest Classification:</strong>
+                    <span
+                        class="classification-badge classification-{{ tables[0].highest_classification.lower().replace(' ', '-') }}">
+                        {{ tables[0].highest_classification }}
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <form onsubmit="performSearch(); return false;">
+            <div class="search-box">
+                <input type="text" id="searchQuery" name="query" class="search-input"
+                    placeholder="Enter search terms (leave empty for all records)..."
+                    value="{{ request.args.get('q', '') }}" />
+                <input type="hidden" id="selectedTable" value="{{ selected_table }}">
+                <button type="submit" class="search-button">
+                    Search
+                </button>
+            </div>
+        </form>
+
+        <div class="search-help">
+            <h4>Search Examples:</h4>
+            <div class="example-queries">
+                <div class="example">
+                    <strong>Return all records:</strong> <code>(leave search box empty and click Search)</code>
+                </div>
+                <div class="example">
+                    <strong>Simple text:</strong> <code>machine learning</code>
+                </div>
+                <div class="example">
+                    <strong>Wildcard search:</strong> <code>*</code> (explicit wildcard)
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

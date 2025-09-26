@@ -1,0 +1,55 @@
+# Direct libraries imported by CORE Scout (application code)
+Flask
+FastAPI
+Uvicorn
+Requests
+pydantic
+pandas
+PyPDF2
+python-docx
+openpyxl
+python-pptx
+mgrs
+simplekml
+
+# Transitive/runtime dependencies typically required by the above
+# (include these to ensure offline/air-gapped installs succeed)
+# Flask stack
+Werkzeug
+Jinja2
+itsdangerous
+click
+
+# FastAPI / ASGI stack
+starlette
+anyio
+sniffio
+h11
+
+# Uvicorn (may pull optional extras on some platforms)
+uvloop            # optional (not on Windows)
+httptools         # optional
+websockets        # optional
+watchfiles        # optional (dev reload)
+
+# Requests stack
+urllib3
+idna
+charset-normalizer
+certifi
+
+# pydantic v2 stack
+pydantic-core
+typing_extensions
+
+# pandas stack
+numpy
+python-dateutil
+pytz
+TZData            # a.k.a. tzdata (for time zone data)
+
+# Document processing stacks
+lxml              # required by python-docx and python-pptx
+Pillow            # required by python-pptx
+XlsxWriter        # used by python-pptx for certain features
+et-xmlfile        # required by openpyxl

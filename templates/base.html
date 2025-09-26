@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CORE Scout{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+    <div class="App">
+        <!-- Background image -->
+        <img src="{{ url_for('static', filename='images/CORE_logo_no-words.png') }}" alt="Background"
+            class="background-image {{ page_class }}">
+
+        <!-- Header -->
+        <header class="App-header">
+            <a href="{{ url_for('home') }}" class="home-icon">
+                <img src="{{ url_for('static', filename='images/blk_home.png') }}" alt="Home">
+            </a>
+
+            <div class="menu-icon" onclick="toggleMenu()">
+                <img src="{{ url_for('static', filename='images/menu.png') }}" alt="Menu">
+            </div>
+
+            <a href="{{ url_for('settings') }}" class="settings-icon">
+                <img src="{{ url_for('static', filename='images/gear1a.png') }}" alt="Settings">
+            </a>
+
+            <div class="dropdown-menu" id="dropdownMenu" style="display: none;">
+                <a href="{{ url_for('about') }}" onclick="closeMenu()">About</a>
+                <a href="{{ url_for('contact') }}" onclick="closeMenu()">Contact/Help</a>
+            </div>
+
+            <div class="App-title">
+                <h1>SCOUT</h1>
+            </div>
+
+            <nav>
+                <a href="{{ url_for('search') }}">Search</a>
+                <a href="{{ url_for('create') }}">Create</a>
+            </nav>
+        </header>
+
+        <div class="hidden-buffer"></div>
+
+        <!-- Main content -->
+        <main class="App-main">
+            <!-- Flash messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                <div class="flash-message flash-{{ category }}">
+                    {{ message }}
+                    <button onclick="this.parentElement.remove()" class="flash-close">&times;</button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+
+</html>

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}CORE Scout - Settings{% endblock %}
+
+{% set page_class = "settings" %}
+
+{% block content %}
+<div class="page-content">
+    <div class="settings-container">
+        <h2>Load SQLite Database</h2>
+
+        <form action="{{ url_for('upload_database') }}" method="post" enctype="multipart/form-data">
+            <div class="file-input-container">
+                <input type="file" id="database_file" name="database_file" accept=".db,.sqlite,.sqlite3"
+                    style="display: none;" onchange="this.form.submit()">
+
+                <button type="button" class="select-db-button"
+                    onclick="document.getElementById('database_file').click()">
+                    Browse for Database File…
+                </button>
+
+                <div class="supported-formats">
+                    <small>Supported: .db, .sqlite, .sqlite3</small>
+                </div>
+            </div>
+        </form>
+
+        <p class="status-text">
+            Select a SQLite database file to load into CORE Scout.
+            The database will be analyzed and made available for searching.
+        </p>
+    </div>
+</div>
+{% endblock %}

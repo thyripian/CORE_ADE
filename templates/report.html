@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}CORE Scout - Report{% endblock %}
+
+{% set page_class = "report report-page" %}
+
+{% block content %}
+<div class="report-scrollable-container">
+    <div class="full-report-container">
+        <button class="back-button" onclick="history.back()">
+            Go Back
+        </button>
+
+        <h2>
+            {% set report_name = record.name or record.title or record.filename or record.id or 'Report Details' %}
+            {{ report_name }}
+            {% if report_name != 'Report Details' and report_name != 'N/A' and not report_name.startswith('Record ') %}
+            Details
+            {% endif %}
+        </h2>
+
+        {% if table_info %}
+        <div class="report-context">
+            <span class="table-badge">
+                Table: {{ table_info.name or 'Unknown' }}
+            </span>
+            {% if record.id %}
+            <span class="record-id">
+                ID: {{ record.id }}
+            </span>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="form-style">
+            {% if table_info and table_info.fields %}
+            <!-- Dynamically render fields based on actual database schema -->
+            {% for field in table_info.fields %}
+            {% set field_name = field.name %}
+            {% set field_value = record[field_name] %}
+
+            <!-- Skip certain fields that are handled specially -->
+            {% if not (field_name == 'id' and table_info.id_fields and field_name in table_info.id_fields) %}
+            <div class="form-group">
+                <label>{{ field_name.replace('_', ' ').title() }}:</label>
+                <div class="form-value">
+                    {% if field.type == 'datetime' or field.type == 'date' %}
+                    {{ field_value | format_datetime if field_value else 'N/A' }}
+                    {% elif field.type == 'json' %}
+                    {{ field_value | tojson(indent=2) if field_value else 'N/A' }}
+                    {% else %}
+                    {{ field_value if field_value and field_value != 'none_found' else 'N/A' }}
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% else %}
+            <!-- Fallback to hardcoded fields if table info is not available -->
+            <div class="form-group">
+                <label>ID:</label>
+                <div class="form-value">{{ record.id if record.id else 'N/A' }}</div>
+            </div>
+            <div class="form-group">
+                <label>Name:</label>
+                <div class="form-value">{{ record.name if record.name else 'N/A' }}</div>
+            </div>
+            <div class="form-group">
+                <label>Value:</label>
+                <div class="form-value">{{ record.value if record.value else 'N/A' }}</div>
+            </div>
+            <div class="form-group">
+                <label>Description:</label>
+                <div class="form-value">{{ record.description if record.description else 'N/A' }}</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Images Section - only show if images field exists -->
+        {% if record.images and record.images is iterable and record.images|length > 0 %}
+        <div class="form-section">
+            <h3>Images</h3>
+            <div class="images-grid">
+                {% for img_data in record.images %}
+                <img src="data:image/jpeg;base64,{{ img_data }}" alt="Report image {{ loop.index }}"
+                    class="report-image" />
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Full Text Section - only show if full_text field exists -->
+        {% if record.full_text %}
+        <div class="form-section">
+            <h3>Full Text</h3>
+            <div class="form-value full-text">
+                {{ record.full_text if record.full_text != 'none_found' else 'N/A' }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Add any report-specific JavaScript here
+</script>
+{% endblock %}

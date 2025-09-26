@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block title %}CORE Scout - Create Database{% endblock %}
+
+{% set page_class = "create create-page" %}
+
+{% block content %}
+<div class="create-scrollable-container">
+    <div class="db-creator-container">
+        <h2>Database Creator</h2>
+        <p class="description">
+            Create a searchable database from a folder of documents.
+            Supports PDF, Word docs, text files, KML files, and more.
+            <br />
+            <em>* Database will be saved to your Downloads folder for easy access.</em>
+        </p>
+
+        <form id="createForm" enctype="multipart/form-data">
+            <!-- Folder Selection -->
+            <div class="section">
+                <h3>1. Select Source Folder</h3>
+                <div class="folder-selection-container">
+                    <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;"
+                        onchange="handleFolderSelection(this)">
+                    <button type="button" class="select-folder-button"
+                        onclick="document.getElementById('folderInput').click()">
+                        📁 Select a Folder
+                    </button>
+                    <div class="selected-folder-info" id="selectedFolderInfo" style="display: none;">
+                        <p class="folder-name" id="folderName"></p>
+                        <p class="file-count" id="fileCount"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Database Name -->
+            <div class="section">
+                <h3>2. Database Name</h3>
+                <input type="text" id="dbName" name="db_name" class="db-name-input" placeholder="my_database.db"
+                    required />
+            </div>
+
+            <!-- Processing Options -->
+            <div class="section">
+                <h3>3. Processing Options</h3>
+                <div class="options-grid">
+                    <label class="option-item">
+                        <input type="checkbox" name="extract_text" checked>
+                        Extract text content
+                    </label>
+
+                    <label class="option-item">
+                        <input type="checkbox" name="extract_coordinates" checked>
+                        Extract GPS/MGRS coordinates
+                    </label>
+
+                    <label class="option-item">
+                        <input type="checkbox" name="include_images">
+                        Include embedded images
+                    </label>
+
+                    <label class="option-item">
+                        <input type="checkbox" name="recursive" checked>
+                        Process subfolders
+                    </label>
+                </div>
+
+                <div class="file-types-section">
+                    <div class="file-types-header">
+                        <h4>File Types to Process:</h4>
+                        <div class="file-types-controls">
+                            <button type="button" class="select-all-button" onclick="selectAllFileTypes()">
+                                ☑ Select All
+                            </button>
+                        </div>
+                    </div>
+                    <div class="file-types-grid">
+                        {% for format in supported_formats %}
+                        <label class="file-type-item">
+                            <input type="checkbox" name="file_types" value="{{ format }}" checked>
+                            .{{ format }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <p class="formats-info">
+                        Showing {{ supported_formats|length }} supported file formats
+                    </p>
+                </div>
+            </div>
+
+            <!-- Create Button -->
+            <div class="section">
+                <button type="button" id="createDbButton" class="create-db-button" onclick="createDatabase()" disabled>
+                    🚀 Create Database
+                </button>
+            </div>
+        </form>
+
+        <!-- Progress and Status Display -->
+        <div class="progress-section" id="progressSection" style="display: none;">
+            <h3>Processing Status</h3>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <p class="progress-text" id="progressText">Preparing...</p>
+            <div class="status-messages" id="statusMessages"></div>
+        </div>
+
+        <div class="result-section" id="resultSection" style="display: none;">
+            <h3>Result</h3>
+            <div class="result-message" id="resultMessage"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let selectedFiles = [];
+    let folderName = '';
+
+    function handleFolderSelection(input) {
+        const files = Array.from(input.files);
+        if (files.length === 0) return;
+
+        selectedFiles = files;
+
+        // Extract folder name from the first file's path
+        const firstFile = files[0];
+        const pathParts = firstFile.webkitRelativePath.split('/');
+        folderName = pathParts[0];
+
+        // Update UI
+        document.getElementById('folderName').textContent = `Selected: ${folderName}`;
+        document.getElementById('fileCount').textContent = `${files.length} files found`;
+        document.getElementById('selectedFolderInfo').style.display = 'block';
+
+        // Auto-generate database name
+        document.getElementById('dbName').value = folderName + '_database.db';
+
+        // Enable create button
+        document.getElementById('createDbButton').disabled = false;
+    }
+
+    function selectAllFileTypes() {
+        const checkboxes = document.querySelectorAll('input[name="file_types"]');
+        const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = !allChecked;
+        });
+
+        const button = document.querySelector('.select-all-button');
+        button.textContent = allChecked ? '☑ Select All' : '☐ Deselect All';
+    }
+
+    async function createDatabase() {
+        if (selectedFiles.length === 0) {
+            alert('Please select a folder first');
+            return;
+        }
+
+        const dbName = document.getElementById('dbName').value;
+        if (!dbName) {
+            alert('Please enter a database name');
+            return;
+        }
+
+        // Show progress section
+        document.getElementById('progressSection').style.display = 'block';
+        document.getElementById('resultSection').style.display = 'none';
+        document.getElementById('createDbButton').disabled = true;
+
+        // Prepare form data
+        const formData = new FormData();
+        formData.append('db_name', dbName);
+
+        // Add processing options
+        const extractText = document.querySelector('input[name="extract_text"]').checked;
+        const extractCoordinates = document.querySelector('input[name="extract_coordinates"]').checked;
+        const includeImages = document.querySelector('input[name="include_images"]').checked;
+        const recursive = document.querySelector('input[name="recursive"]').checked;
+
+        formData.append('extract_text', extractText);
+        formData.append('extract_coordinates', extractCoordinates);
+        formData.append('include_images', includeImages);
+        formData.append('recursive', recursive);
+
+        // Add selected file types
+        const fileTypes = Array.from(document.querySelectorAll('input[name="file_types"]:checked')).map(cb => cb.value);
+        fileTypes.forEach(type => formData.append('file_types', type));
+
+        // Add all files with their relative paths
+        selectedFiles.forEach(file => {
+            formData.append('files', file, file.webkitRelativePath);
+        });
+
+        try {
+            updateProgress(10, 'Uploading files...');
+
+            const response = await fetch('/create_database_from_folder', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                updateProgress(100, 'Database created successfully!');
+                showResult(`Database created successfully at: ${result.dbPath}`, 'success');
+            } else {
+                throw new Error(result.error || 'Database creation failed');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            updateProgress(0, 'Error occurred');
+            showResult(`Error: ${error.message}`, 'error');
+        } finally {
+            document.getElementById('createDbButton').disabled = false;
+        }
+    }
+
+    function updateProgress(percent, message) {
+        document.getElementById('progressFill').style.width = percent + '%';
+        document.getElementById('progressText').textContent = message;
+    }
+
+    function showResult(message, type) {
+        const resultDiv = document.getElementById('resultMessage');
+        resultDiv.textContent = message;
+        resultDiv.className = `result-message ${type}`;
+        document.getElementById('resultSection').style.display = 'block';
+    }
+</script>
+{% endblock %}

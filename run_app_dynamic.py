@@ -244,6 +244,28 @@ def main():
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
+    @app.get("/tables/{table_name}/records/{record_id}")
+    def get_record(table_name: str, record_id: str):
+        """Get a single record by ID"""
+        try:
+            if not schema_manager:
+                raise HTTPException(status_code=400, detail="No database loaded")
+            
+            # Get the record from the database
+            record = schema_manager.get_record_by_id(table_name, record_id)
+            if not record:
+                raise HTTPException(status_code=404, detail=f"Record {record_id} not found in table {table_name}")
+            
+            # Add table name to the record for context
+            record['table'] = table_name
+            
+            return record
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
     @app.get("/export/kml/{table_name}")
     def export_kml(
         table_name: str,

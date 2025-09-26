@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Test Folder Selection</title>
+</head>
+
+<body>
+    <h1>Test Folder Selection</h1>
+
+    <div>
+        <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;"
+            onchange="handleFolderSelection(this)">
+        <button type="button" onclick="document.getElementById('folderInput').click()">
+            📁 Select a Folder
+        </button>
+    </div>
+
+    <div id="selectedFolderInfo" style="display: none;">
+        <h3>Selected Folder:</h3>
+        <p id="folderName"></p>
+        <p id="fileCount"></p>
+        <div id="fileList"></div>
+    </div>
+
+    <script>
+        function handleFolderSelection(input) {
+            const files = Array.from(input.files);
+            if (files.length === 0) return;
+
+            // Extract folder name from the first file's path
+            const firstFile = files[0];
+            const pathParts = firstFile.webkitRelativePath.split('/');
+            const folderName = pathParts[0];
+
+            // Update UI
+            document.getElementById('folderName').textContent = `Folder: ${folderName}`;
+            document.getElementById('fileCount').textContent = `Files: ${files.length}`;
+
+            // Show file list
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = '<h4>Files:</h4><ul>';
+            files.forEach(file => {
+                fileList.innerHTML += `<li>${file.webkitRelativePath}</li>`;
+            });
+            fileList.innerHTML += '</ul>';
+
+            document.getElementById('selectedFolderInfo').style.display = 'block';
+        }
+    </script>
+</body>
+
+</html>

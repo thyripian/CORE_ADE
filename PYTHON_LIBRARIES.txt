@@ -1,0 +1,12 @@
+Flask
+FastAPI
+Uvicorn
+Requests
+pydantic
+pandas
+PyPDF2
+python-docx
+openpyxl
+python-pptx
+mgrs
+simplekml

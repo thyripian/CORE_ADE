@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}CORE Scout - About{% endblock %}
+
+{% set page_class = "about" %}
+
+{% block content %}
+<div class="page-content">
+    <div class="about-content">
+        <h2>Part of the CORE enterprise.</h2>
+        <p>
+            The Centralized Operational Reporting Engine (CORE) was originally developed
+            to facilitate databasing and querying of Word documents, Excel spreadsheets,
+            PowerPoint presentations, and Adobe PDFs that were stored on shared
+            drives, providing an efficient way to manage and search through large
+            collections of files without a practical solution in place.
+        </p>
+
+        <p>
+            This lightweight version of the same application has been developed
+            specifically for use in offline and austere environments. It was built as a
+            BYOD (Bring Your Own Database) solution, allowing any prebuilt SQLite
+            database to be queried in real time, driving operational awareness and
+            fulfilling intelligence needs.
+        </p>
+    </div>
+</div>
+{% endblock %}

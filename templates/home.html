@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}CORE Scout - Home{% endblock %}
+
+{% set page_class = "home" %}
+
+{% block content %}
+<div class="home-content">
+    <h1><b>Welcome to SCOUT!</b></h1>
+    <p>Standalone CORE Offline Utility Tool</p>
+
+    {% if not backend_ready %}
+    <div class="backend-error">
+        <h3>⚠️ Backend Not Available</h3>
+        <p>The backend service is not running. Please check the settings or restart the application.</p>
+        <button onclick="location.reload()">Retry Connection</button>
+    </div>
+    {% endif %}
+
+    {% if db_info %}
+    <div class="db-status-toast">
+        <strong>Database Status:</strong><br>
+        Tables: {{ db_info.total_tables or 0 }}<br>
+        Total Rows: {{ "{:,}".format(db_info.total_rows or 0) }}<br>
+        FTS Available: {{ "Yes" if db_info.fts_available else "No" }}
+    </div>
+    {% else %}
+    <div class="db-status-toast">
+        No database loaded. Select database in Settings before querying.
+    </div>
+    {% endif %}
+
+    <div class="port-indicator">
+        Active Port: {{ backend_port or '—' }}
+    </div>
+</div>
+{% endblock %}

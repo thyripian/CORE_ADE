@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}CORE Scout - Search Results{% endblock %}
+
+{% set page_class = "results results-page" %}
+
+{% block content %}
+<div class="search-results-page">
+    {% if table_info and table_info.mgrs_fields and table_info.mgrs_fields|length > 0 %}
+    <div class="sr-toolbar">
+        <button class="sr-kmz-btn" onclick="exportKML('{{ table }}', '{{ query }}', '{{ table_info.mgrs_fields[0] }}')">
+            Export KML
+        </button>
+    </div>
+    {% endif %}
+
+    <div class="sr-header">
+        <h2>Search results for "{{ query }}" in <em>{{ table }}</em></h2>
+        <div class="sr-count">
+            {{ "{:,}".format(total) }} results ({{ took }}ms)
+        </div>
+    </div>
+
+    <div class="sr-scrollable-container">
+        <div class="sr-list">
+            {% for result in results %}
+            <div class="sr-card"
+                onclick="window.location.href='/report/{{ result.id or loop.index }}?table={{ table }}'">
+                <h3 class="sr-title">
+                    {{ result.name or result.title or result.filename or result.id or 'Untitled' }}
+                </h3>
+                <div class="sr-url">
+                    {{ table }}/{{ result.id or loop.index }}
+                </div>
+                <p class="sr-snippet">
+                    {{ result.description or result.content or result.full_text or result.value or 'No preview
+                    available.'
+                    }}
+                </p>
+
+                {% if result._score %}
+                <div class="sr-score">
+                    Score: {{ "%.2f"|format(result._score) }}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% if results|length == 0 %}
+    <div class="sr-no-results">
+        <p>No results found for "{{ query }}" in {{ table }}</p>
+        <p>Try adjusting your search terms or check the table structure.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

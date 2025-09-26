@@ -427,6 +427,36 @@ class DynamicSchemaManager:
             max_score=1.0  # SQLite doesn't have relevance scoring
         )
 
+    def get_record_by_id(self, table_name: str, record_id: str) -> Optional[Dict[str, Any]]:
+        """Get a single record by ID"""
+        if table_name not in self.tables:
+            raise ValueError(f"Table '{table_name}' not found")
+        
+        table_info = self.tables[table_name]
+        
+        # Try to find the primary key field
+        id_field = None
+        if table_info.id_fields:
+            id_field = table_info.id_fields[0]
+        else:
+            # Fallback to common ID field names
+            for field in table_info.fields:
+                if field.name.lower() in ['id', 'record_id', 'primary_key']:
+                    id_field = field.name
+                    break
+        
+        if not id_field:
+            raise ValueError(f"No ID field found for table '{table_name}'")
+        
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute(f"SELECT * FROM {table_name} WHERE {id_field} = ?", (record_id,))
+            row = cursor.fetchone()
+            
+            if row:
+                return dict(row)
+            return None
+
     def _build_search_query(self, table_name: str, query: str, fields: List[str], 
                            filters: Dict[str, Any], sort: List[Dict[str, str]], 
                            size: int, from_: int) -> Dict[str, Any]:
