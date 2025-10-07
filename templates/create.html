@@ -20,10 +20,7 @@
             <div class="section">
                 <h3>1. Select Source Folder</h3>
                 <div class="folder-selection-container">
-                    <input type="file" id="folderInput" webkitdirectory directory multiple style="display: none;"
-                        onchange="handleFolderSelection(this)">
-                    <button type="button" class="select-folder-button"
-                        onclick="document.getElementById('folderInput').click()">
+                    <button type="button" class="select-folder-button" onclick="selectFolder()">
                         📁 Select a Folder
                     </button>
                     <div class="selected-folder-info" id="selectedFolderInfo" style="display: none;">
@@ -116,28 +113,50 @@
 <script>
     let selectedFiles = [];
     let folderName = '';
+    let selectedFolderPath = '';
 
-    function handleFolderSelection(input) {
-        const files = Array.from(input.files);
-        if (files.length === 0) return;
+    function selectFolder() {
+        // Call Flask route to open native folder dialog
+        fetch('/select_folder', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.folder_path) {
+                    // Store the folder path in the local variable
+                    selectedFolderPath = data.folder_path;
+                    console.log('Setting selectedFolderPath to:', data.folder_path);
+                    console.log('Verification - selectedFolderPath is now:', selectedFolderPath);
 
-        selectedFiles = files;
+                    // Extract folder name from path
+                    const pathParts = data.folder_path.split(/[\\/]/);
+                    folderName = pathParts[pathParts.length - 1] || 'Unknown';
 
-        // Extract folder name from the first file's path
-        const firstFile = files[0];
-        const pathParts = firstFile.webkitRelativePath.split('/');
-        folderName = pathParts[0];
+                    // Update UI
+                    document.getElementById('folderName').textContent = `Selected: ${folderName}`;
+                    document.getElementById('fileCount').textContent = `Path: ${data.folder_path}`;
+                    document.getElementById('selectedFolderInfo').style.display = 'block';
 
-        // Update UI
-        document.getElementById('folderName').textContent = `Selected: ${folderName}`;
-        document.getElementById('fileCount').textContent = `${files.length} files found`;
-        document.getElementById('selectedFolderInfo').style.display = 'block';
+                    // Auto-generate database name
+                    const dbName = `${folderName}_database.db`;
+                    document.getElementById('dbName').value = dbName;
 
-        // Auto-generate database name
-        document.getElementById('dbName').value = folderName + '_database.db';
+                    // Enable create button
+                    document.getElementById('createDbButton').disabled = false;
 
-        // Enable create button
-        document.getElementById('createDbButton').disabled = false;
+                    console.log('Folder selected:', folderName);
+                    console.log('Folder path:', data.folder_path);
+                } else {
+                    alert('Failed to select folder: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error selecting folder:', error);
+                alert('Error selecting folder: ' + error.message);
+            });
     }
 
     function selectAllFileTypes() {
@@ -153,12 +172,16 @@
     }
 
     async function createDatabase() {
-        if (selectedFiles.length === 0) {
+        console.log('createDatabase called');
+        console.log('selectedFolderPath:', selectedFolderPath);
+
+        if (!selectedFolderPath) {
             alert('Please select a folder first');
             return;
         }
 
         const dbName = document.getElementById('dbName').value;
+        console.log('Database name:', dbName);
         if (!dbName) {
             alert('Please enter a database name');
             return;
@@ -168,6 +191,7 @@
         document.getElementById('progressSection').style.display = 'block';
         document.getElementById('resultSection').style.display = 'none';
         document.getElementById('createDbButton').disabled = true;
+        console.log('Button disabled, progress shown');
 
         // Prepare form data
         const formData = new FormData();
@@ -188,31 +212,62 @@
         const fileTypes = Array.from(document.querySelectorAll('input[name="file_types"]:checked')).map(cb => cb.value);
         fileTypes.forEach(type => formData.append('file_types', type));
 
-        // Add all files with their relative paths
-        selectedFiles.forEach(file => {
-            formData.append('files', file, file.webkitRelativePath);
-        });
+        // Get the folder path from the local variable
+        const folderPath = selectedFolderPath;
+        console.log('selectedFolderPath variable:', selectedFolderPath);
+        console.log('Folder path:', folderPath);
+        console.log('Type of folderPath:', typeof folderPath);
+        if (!folderPath) {
+            alert('Please select a folder first');
+            return;
+        }
+        formData.append('folder_path', folderPath);
 
         try {
             updateProgress(10, 'Uploading files...');
+            console.log('About to make fetch request');
 
             const response = await fetch('/create_database_from_folder', {
                 method: 'POST',
                 body: formData
             });
 
-            const result = await response.json();
+            console.log('Response received:', response.status, response.statusText);
 
-            if (response.ok && result.success) {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log('Response JSON:', result);
+
+            if (result.success) {
                 updateProgress(100, 'Database created successfully!');
-                showResult(`Database created successfully at: ${result.dbPath}`, 'success');
+                const outPath = result.fullPath || result.dbPath || 'unknown location';
+                showResult(`Database created successfully at: ${outPath}`, 'success');
             } else {
                 throw new Error(result.error || 'Database creation failed');
             }
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Error details:', error);
+            console.error('Error name:', error.name);
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
+
+            let errorMessage = 'Unknown error occurred';
+
+            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                errorMessage = 'Network error: Unable to connect to server. Please check if the Flask server is running.';
+            } else if (error.name === 'TypeError' && error.message.includes('NetworkError')) {
+                errorMessage = 'Network error: Connection was interrupted.';
+            } else if (error.message.includes('HTTP')) {
+                errorMessage = `Server error: ${error.message}`;
+            } else {
+                errorMessage = `Error: ${error.message}`;
+            }
+
             updateProgress(0, 'Error occurred');
-            showResult(`Error: ${error.message}`, 'error');
+            showResult(errorMessage, 'error');
         } finally {
             document.getElementById('createDbButton').disabled = false;
         }

@@ -47,10 +47,12 @@ def start_backend():
         
         # Start the backend process without any database
         cmd = [sys.executable, "run_app_dynamic.py", "--port", str(BACKEND_PORT)]
+        # IMPORTANT: Do not PIPE stdout/stderr without consuming them; buffers can fill and block the child process.
+        # Redirect to DEVNULL to avoid hangs caused by heavy backend logging during long operations.
         BACKEND_PROCESS = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             env=env,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         )
@@ -270,6 +272,61 @@ def test_upload():
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/select_folder', methods=['POST'])
+def select_folder():
+    """Open native folder dialog and return the selected folder path"""
+    try:
+        import subprocess
+        import sys
+
+        # Run a small inline Python script to open the folder picker.
+        # This avoids writing files inside the project directory, which was triggering the Flask reloader.
+        inline_code = (
+            "import tkinter as tk\n"
+            "from tkinter import filedialog\n"
+            "try:\n"
+            "    root = tk.Tk()\n"
+            "    root.withdraw()\n"
+            "    p = filedialog.askdirectory(title='Select folder to process')\n"
+            "    root.destroy()\n"
+            "    print(p if p else 'NO_FOLDER_SELECTED')\n"
+            "except Exception as e:\n"
+            "    print('ERROR: ' + str(e))\n"
+        )
+
+        try:
+            result = subprocess.run(
+                [sys.executable, "-c", inline_code],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            )
+
+            if result.returncode == 0:
+                output = result.stdout.strip()
+                if output == "NO_FOLDER_SELECTED":
+                    return jsonify({'success': False, 'error': 'No folder selected'})
+                if output.startswith("ERROR:"):
+                    return jsonify({'success': False, 'error': output[6:]})
+                return jsonify({'success': True, 'folder_path': output})
+
+            return jsonify({'success': False, 'error': f'Script failed: {result.stderr}'})
+
+        except subprocess.TimeoutExpired:
+            return jsonify({'success': False, 'error': 'Folder selection timed out'})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
+            
+    except Exception as e:
+        print(f"[FLASK] Error in select_folder: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/create_database_from_folder', methods=['POST'])
 def create_database_from_folder():
     """Handle database creation from uploaded folder"""
@@ -291,115 +348,64 @@ def create_database_from_folder():
         recursive = request.form.get('recursive') == 'true'
         file_types = request.form.getlist('file_types')
         
-        # Get uploaded files
-        files = request.files.getlist('files')
-        print(f"[FLASK] Files to process: {len(files)}")
-        if not files:
-            return jsonify({'success': False, 'error': 'No files uploaded'}), 400
+        # Get folder path from form data
+        folder_path = request.form.get('folder_path')
+        print(f"[FLASK] Folder path: {folder_path}")
+        if not folder_path:
+            return jsonify({'success': False, 'error': 'Folder path is required'}), 400
         
-        # Create temporary directory for uploaded files
-        temp_dir = tempfile.mkdtemp()
-        print(f"[FLASK] Created temp directory: {temp_dir}")
+        # Verify folder exists
+        if not os.path.exists(folder_path):
+            return jsonify({'success': False, 'error': f'Folder does not exist: {folder_path}'}), 400
         
-        try:
-            # Save files with preserved directory structure
-            print(f"[FLASK] Saving files to temp directory: {temp_dir}")
-            for i, file in enumerate(files):
-                if file.filename:  # Skip empty files
-                    print(f"[FLASK] Processing file {i+1}/{len(files)}: {file.filename}")
-                    # The filename from FormData.append(file, file, webkitRelativePath) 
-                    # will be the webkitRelativePath
-                    relative_path = file.filename
-                    
-                    # Sanitize the path
-                    path_parts = relative_path.split('/')
-                    sanitized_parts = [secure_filename(part) for part in path_parts]
-                    file_path = os.path.join(temp_dir, *sanitized_parts)
-                    
-                    # Create directory if it doesn't exist
-                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                    
-                    # Save file
-                    file.save(file_path)
-                    print(f"[FLASK] Saved file to: {file_path}")
-            
-            print(f"[FLASK] All files saved successfully")
-            
-            # Prepare options for backend
-            options = {
-                'extractText': extract_text,
-                'extractCoordinates': extract_coordinates,
-                'includeImages': include_images,
-                'recursive': recursive,
-                'fileTypes': file_types
-            }
-            
-            # Create database via backend API
-            create_data = {
-                'folderPath': temp_dir,
-                'dbName': db_name,
-                'options': json.dumps(options)
-            }
-            
-            print(f"[FLASK] Calling backend API with temp_dir: {temp_dir}")
-            print(f"[FLASK] Create data: {create_data}")
-            
-            # Check if backend is running first
-            print(f"[FLASK] Checking backend health...")
-            health_response = api_request('GET', '/health', timeout=5)
-            if not health_response:
-                print(f"[FLASK] Backend health check failed")
-                return jsonify({'success': False, 'error': 'Backend is not responding'}), 500
-            
-            print(f"[FLASK] Backend health check passed, calling create-database...")
-            response = api_request('POST', '/create-database', json=create_data, timeout=60)  # 1 minute timeout
-            print(f"[FLASK] Backend response: {response.status_code if response else 'None'}")
-            
-            if response and response.status_code == 200:
-                result = response.json()
-                if result.get('success'):
-                    db_path = result.get('dbPath')
-                    
-                    # Switch to the new database
-                    switch_data = {'dbPath': db_path}
-                    api_request('POST', '/switch-database', json=switch_data)
-                    
-                    return jsonify({
-                        'success': True,
-                        'message': f'Database created successfully: {result.get("message", "")}',
-                        'dbPath': db_path
-                    })
-                else:
-                    return jsonify({'success': False, 'error': result.get('error', 'Unknown error')}), 500
-            else:
-                return jsonify({'success': False, 'error': 'Backend API call failed'}), 500
+        # Prepare options for backend
+        options = {
+            'extractText': extract_text,
+            'extractCoordinates': extract_coordinates,
+            'includeImages': include_images,
+            'recursive': recursive,
+            'fileTypes': file_types
+        }
+        
+        # Create database via backend API using the original folder path
+        create_data = {
+            'folderPath': folder_path,
+            'dbName': db_name,
+            'options': json.dumps(options)
+        }
+        
+        print(f"[FLASK] Calling backend API with folder_path: {folder_path}")
+        print(f"[FLASK] Create data: {create_data}")
+        
+        # Check if backend is running first
+        print(f"[FLASK] Checking backend health...")
+        health_response = api_request('GET', '/health', timeout=5)
+        if not health_response:
+            print(f"[FLASK] Backend health check failed")
+            return jsonify({'success': False, 'error': 'Backend is not responding'}), 500
+        
+        print(f"[FLASK] Backend health check passed, calling create-database...")
+        response = api_request('POST', '/create-database', json=create_data, timeout=300)  # 5 minute timeout
+        print(f"[FLASK] Backend response: {response.status_code if response else 'None'}")
+        
+        if response and response.status_code == 200:
+            result = response.json()
+            if result.get('success'):
+                db_path = result.get('dbPath')
                 
-        finally:
-            # Clean up temporary directory
-            try:
-                # Wait a bit for file handles to be released
-                import time
-                time.sleep(1)
-                shutil.rmtree(temp_dir)
-                print(f"[FLASK] Cleaned up temp directory: {temp_dir}")
-            except OSError as e:
-                print(f"[FLASK] Error cleaning up temp directory: {e}")
-                # Try to clean up individual files
-                try:
-                    for root, dirs, files in os.walk(temp_dir, topdown=False):
-                        for file in files:
-                            try:
-                                os.remove(os.path.join(root, file))
-                            except:
-                                pass
-                        for dir in dirs:
-                            try:
-                                os.rmdir(os.path.join(root, dir))
-                            except:
-                                pass
-                    os.rmdir(temp_dir)
-                except:
-                    pass
+                # Switch to the new database
+                switch_data = {'dbPath': db_path}
+                api_request('POST', '/switch-database', json=switch_data)
+                
+                return jsonify({
+                    'success': True,
+                    'message': f'Database created successfully: {result.get("message", "")}',
+                    'dbPath': db_path
+                })
+            else:
+                return jsonify({'success': False, 'error': result.get('error', 'Unknown error')}), 500
+        else:
+            return jsonify({'success': False, 'error': 'Backend API call failed'}), 500
                 
     except Exception as e:
         print(f"[FLASK] Error in create_database_from_folder: {str(e)}")
