@@ -124,6 +124,11 @@ def search():
     if tables_response and tables_response.status_code == 200:
         tables = tables_response.json()
     
+    # If no tables available, redirect to settings with a helpful message
+    if not tables:
+        flash('No tables detected in the current database. Please load a valid database in Settings.', 'error')
+        return redirect(url_for('settings'))
+    
     selected_table = tables[0].get('name', '') if tables else ''
     return render_template('search.html', tables=tables, selected_table=selected_table)
 
@@ -448,20 +453,31 @@ def upload_database():
         # Switch to uploaded database
         switch_data = {'dbPath': file_path}
         response = api_request('POST', '/switch-database', json=switch_data)
-        
+
+        # Verify switch succeeded and tables are available
+        tables_ok = False
         if response and response.status_code == 200:
+            tables_resp = api_request('GET', '/tables')
+            if tables_resp and tables_resp.status_code == 200:
+                try:
+                    tables_list = tables_resp.json() or []
+                    tables_ok = isinstance(tables_list, list) and len(tables_list) > 0
+                except Exception:
+                    tables_ok = False
+
+        if response and response.status_code == 200 and tables_ok:
             # Clean up previous database file
             if CURRENT_DB_FILE and os.path.exists(CURRENT_DB_FILE):
                 try:
                     os.remove(CURRENT_DB_FILE)
                 except OSError:
                     pass
-            
+
             # Update current database file
             CURRENT_DB_FILE = file_path
             flash(f'Database loaded: {filename}', 'success')
         else:
-            flash('Failed to load database', 'error')
+            flash('Failed to load database (no tables detected or switch failed)', 'error')
             # Clean up new file on failure
             try:
                 os.remove(file_path)

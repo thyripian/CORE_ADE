@@ -107,6 +107,10 @@ class DynamicSchemaManager:
     def connect(self) -> bool:
         """Connect to database and initialize schema"""
         try:
+            # Reset cached schema state before connecting
+            self.tables = {}
+            self._fts_tables = set()
+            self._query_parser = None
             self.conn = sqlite3.connect(
                 self.db_path,
                 check_same_thread=False
@@ -128,6 +132,10 @@ class DynamicSchemaManager:
             
             # Update path and connect to new database
             self.db_path = new_db_path
+            # Ensure all cached schema info is cleared when switching
+            self.tables = {}
+            self._fts_tables = set()
+            self._query_parser = None
             return self.connect()
         except Exception as e:
             print(f"Failed to switch database: {e}")

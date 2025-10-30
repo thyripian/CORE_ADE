@@ -124,21 +124,19 @@ function handleFileUpload(file, dropZone) {
         if (file.name.toLowerCase().endsWith('.db') ||
             file.name.toLowerCase().endsWith('.sqlite') ||
             file.name.toLowerCase().endsWith('.sqlite3')) {
+            // Use FormData + fetch; FileList assignment is not allowed in browsers
+            const formData = new FormData();
+            formData.append('database_file', file, file.name);
 
-            // Create form and submit
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/upload_database';
-            form.enctype = 'multipart/form-data';
-
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.name = 'database_file';
-            input.files = [file];
-
-            form.appendChild(input);
-            document.body.appendChild(form);
-            form.submit();
+            fetch('/upload_database', {
+                method: 'POST',
+                body: formData
+            }).then(() => {
+                // Navigate to settings to display flash messages and refreshed state
+                window.location.href = '/settings';
+            }).catch(() => {
+                alert('Failed to upload database. Please try again via Settings.');
+            });
         } else {
             alert('Please upload a valid database file (.db, .sqlite, or .sqlite3)');
         }

@@ -321,8 +321,8 @@ nav a:hover {
 
 /* Search page styles */
 .search-container {
-    background-color: rgba(255, 255, 255, 0.95);
-    color: #333;
+    background-color: rgba(0, 0, 0, 0.75);
+    color: #ffffff;
     padding: 30px;
     border-radius: 10px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -334,16 +334,17 @@ nav a:hover {
 }
 
 .table-info {
-    background-color: #f8f9fa;
+    background-color: rgba(0, 0, 0, 0.6);
     padding: 20px;
     border-radius: 5px;
     margin-bottom: 20px;
     border-left: 4px solid #007bff;
+    color: #ffffff;
 }
 
 .table-info h4 {
     margin-top: 0;
-    color: #495057;
+    color: #ffffff;
 }
 
 .info-grid {
@@ -421,9 +422,11 @@ nav a:hover {
 .search-input {
     flex: 1;
     padding: 12px;
-    border: 2px solid #ddd;
+    border: 1px solid #666;
     border-radius: 5px;
     font-size: 16px;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: #ffffff;
 }
 
 .search-input:focus {
@@ -477,6 +480,7 @@ nav a:hover {
     padding: 2px 6px;
     border-radius: 3px;
     font-family: monospace;
+    color: #000000;
 }
 
 .refresh-button {
@@ -781,11 +785,11 @@ nav a:hover {
 }
 
 .sr-card {
-    background-color: rgba(255, 255, 255, 0.95);
-    color: #333;
+    background-color: rgba(0, 0, 0, 0.75);
+    color: #ffffff;
     padding: 20px;
     border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -796,19 +800,19 @@ nav a:hover {
 }
 
 .sr-title {
-    color: #007bff;
+    color: #78a7ff;
     margin: 0 0 10px 0;
     font-size: 1.2em;
 }
 
 .sr-url {
-    color: #6c757d;
+    color: #c2c7cf;
     font-size: 0.9em;
     margin-bottom: 10px;
 }
 
 .sr-snippet {
-    color: #495057;
+    color: #e5e5e5;
     line-height: 1.5;
     margin: 0;
 }
@@ -816,12 +820,12 @@ nav a:hover {
 .sr-matches {
     margin-top: 15px;
     padding-top: 15px;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .sr-matches-label {
     font-weight: bold;
-    color: #495057;
+    color: #e5e5e5;
     margin-bottom: 8px;
 }
 
@@ -831,11 +835,11 @@ nav a:hover {
 
 .sr-match-field {
     font-weight: bold;
-    color: #007bff;
+    color: #78a7ff;
 }
 
 .sr-match-text-highlight {
-    background-color: #fff3cd;
+    background-color: rgba(255, 255, 255, 0.15);
     padding: 1px 3px;
     border-radius: 2px;
 }
@@ -856,8 +860,8 @@ nav a:hover {
 
 /* Settings page styles */
 .settings-container {
-    background-color: rgba(255, 255, 255, 0.95);
-    color: #333;
+    background-color: rgba(0, 0, 0, 0.75);
+    color: #ffffff;
     padding: 30px;
     border-radius: 10px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -870,7 +874,7 @@ nav a:hover {
 
 .settings-container h2 {
     margin-top: 0;
-    color: #495057;
+    color: #ffffff;
     text-align: center;
 }
 
@@ -947,10 +951,10 @@ nav a:hover {
 .status-text {
     margin-top: 20px;
     padding: 15px;
-    background-color: #f8f9fa;
+    background-color: rgba(0, 0, 0, 0.6);
     border-radius: 5px;
     text-align: center;
-    color: #495057;
+    color: #ffffff;
 }
 
 /* Create page styles */
@@ -960,8 +964,8 @@ nav a:hover {
 }
 
 .db-creator-container {
-    background-color: rgba(255, 255, 255, 0.95);
-    color: #333;
+    background-color: rgba(0, 0, 0, 0.75);
+    color: #ffffff;
     padding: 30px;
     border-radius: 10px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -980,7 +984,7 @@ nav a:hover {
 
 .description {
     text-align: center;
-    color: #6c757d;
+    color: #e5e5e5;
     margin-bottom: 30px;
     line-height: 1.6;
 }
@@ -988,7 +992,7 @@ nav a:hover {
 .section {
     margin-bottom: 30px;
     padding: 20px;
-    background-color: #f8f9fa;
+    background-color: rgba(0, 0, 0, 0.6);
     border-radius: 8px;
 }
 
@@ -1016,11 +1020,11 @@ nav a:hover {
 
 .drop-zone-content p {
     margin: 10px 0;
-    color: #495057;
+    color: #e5e5e5;
 }
 
 .selected-path {
-    color: #28a745;
+    color: #6ee788;
     font-weight: bold;
 }
 
@@ -1041,9 +1045,11 @@ nav a:hover {
 .db-name-input {
     width: 100%;
     padding: 12px;
-    border: 2px solid #ddd;
+    border: 1px solid #666;
     border-radius: 5px;
     font-size: 16px;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: #ffffff;
 }
 
 .db-name-input:focus {
@@ -1134,7 +1140,7 @@ nav a:hover {
 }
 
 .formats-info {
-    color: #6c757d;
+    color: #c2c7cf;
     font-size: 0.9em;
     text-align: center;
     margin: 0;
@@ -1161,13 +1167,13 @@ nav a:hover {
 
 .progress-text {
     text-align: center;
-    color: #495057;
+    color: #e5e5e5;
     margin: 5px 0;
 }
 
 .current-file {
     text-align: center;
-    color: #6c757d;
+    color: #c2c7cf;
     font-size: 0.9em;
     margin: 5px 0;
 }
@@ -1218,8 +1224,8 @@ nav a:hover {
 }
 
 .full-report-container {
-    background-color: rgba(255, 255, 255, 0.95);
-    color: #333;
+    background-color: rgba(0, 0, 0, 0.75);
+    color: #ffffff;
     padding: 20px 30px 30px 30px;
     border-radius: 10px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -1249,7 +1255,7 @@ nav a:hover {
 }
 
 .full-report-container h2 {
-    color: #495057;
+    color: #ffffff;
     margin-bottom: 20px;
     font-size: 1.8em;
 }
@@ -1263,8 +1269,8 @@ nav a:hover {
 
 .table-badge,
 .record-id {
-    background-color: #e9ecef;
-    color: #495057;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: #ffffff;
     padding: 5px 12px;
     border-radius: 15px;
     font-size: 0.9em;
@@ -1286,17 +1292,18 @@ nav a:hover {
 
 .form-group label {
     font-weight: bold;
-    color: #495057;
+    color: #e5e5e5;
     padding-top: 5px;
 }
 
 .form-value {
-    background-color: #f8f9fa;
+    background-color: rgba(0, 0, 0, 0.6);
     padding: 10px;
     border-radius: 5px;
-    border: 1px solid #dee2e6;
+    border: 1px solid rgba(255, 255, 255, 0.15);
     min-height: 20px;
     word-break: break-word;
+    color: #ffffff;
 }
 
 .form-section {
@@ -1364,8 +1371,8 @@ nav a:hover {
 /* About and Contact pages */
 .about-content,
 .contact-content {
-    background-color: rgba(255, 255, 255, 0.95);
-    color: #333;
+    background-color: rgba(0, 0, 0, 0.75);
+    color: #ffffff;
     padding: 40px;
     border-radius: 10px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -1381,13 +1388,18 @@ nav a:hover {
 
 .about-content h2,
 .contact-content h2 {
-    color: #495057;
+    color: #ffffff;
     text-align: center;
     margin-bottom: 30px;
 }
 
+/* Center body text under Contact/Help header */
+.contact-content p {
+    text-align: center;
+}
+
 .contact-content a {
-    color: #007bff;
+    color: #78a7ff;
     text-decoration: none;
 }
 
