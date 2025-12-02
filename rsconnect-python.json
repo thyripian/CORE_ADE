@@ -1,0 +1,12 @@
+{
+    "version": 1,
+    "python": {
+        "version": "3.9",
+        "package_manager": "pip",
+        "package_file": "requirements.txt"
+    },
+    "deploy": {
+        "app_mode": "python-api",
+        "entry_point": "app_wsgi:application"
+    }
+}

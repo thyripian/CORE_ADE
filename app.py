@@ -10,10 +10,13 @@ import time
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_file
 from werkzeug.utils import secure_filename
 import tempfile
-import shutil
 import subprocess
 import signal
 import sys
+from core.utilities.logging_config import get_logger
+
+# Set up logging
+logger = get_logger('flask_app')
 
 app = Flask(__name__)
 # Ensure templates and static assets refresh during development and when using the run script
@@ -33,57 +36,90 @@ BACKEND_PORT = 8000
 CURRENT_DB_FILE = None
 
 def start_backend():
-    """Start the FastAPI backend process"""
+    """
+    Start the FastAPI backend
+    Uses thread-based approach for Posit Connect compatibility
+    Falls back to subprocess for local development if needed
+    """
     global BACKEND_PROCESS
     
-    if BACKEND_PROCESS and BACKEND_PROCESS.poll() is None:
-        return True  # Backend already running
+    # Check if we're in Posit Connect environment
+    # Posit Connect sets specific environment variables
+    is_posit_connect = os.getenv('RSTUDIO_PRODUCT') == 'CONNECT' or os.getenv('RS_CONNECT_SERVER') is not None
     
-    try:
-        # Clear any database environment variables to ensure clean startup
-        env = os.environ.copy()
-        env.pop('DB_PATH', None)
-        env.pop('API_PORT', None)
+    if is_posit_connect:
+        # Use thread-based backend for Posit Connect
+        logger.info("Detected Posit Connect environment, using thread-based backend")
+        from core.utilities.backend_runner import start_backend_in_thread
+        return start_backend_in_thread(port=BACKEND_PORT)
+    else:
+        # Use subprocess for local development
+        logger.info("Local development environment, using subprocess backend")
+        if BACKEND_PROCESS and BACKEND_PROCESS.poll() is None:
+            logger.info("Backend process already running")
+            return True  # Backend already running
         
-        # Start the backend process without any database
-        cmd = [sys.executable, "run_app_dynamic.py", "--port", str(BACKEND_PORT)]
-        # IMPORTANT: Do not PIPE stdout/stderr without consuming them; buffers can fill and block the child process.
-        # Redirect to DEVNULL to avoid hangs caused by heavy backend logging during long operations.
-        BACKEND_PROCESS = subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env=env,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-        )
-        
-        # Wait for backend to be ready
-        for _ in range(20):  # 10 seconds timeout
-            try:
-                response = requests.get(f"{API_BASE_URL}/health", timeout=1)
-                if response.status_code == 200:
-                    print(f"Backend started successfully on port {BACKEND_PORT}")
-                    return True
-            except requests.exceptions.RequestException:
-                time.sleep(0.5)
-        
-        print("Backend failed to start within timeout")
-        return False
-    except Exception as e:
-        print(f"Error starting backend: {e}")
-        return False
+        try:
+            logger.info("Starting FastAPI backend on port %s", BACKEND_PORT)
+            # Clear any database environment variables to ensure clean startup
+            env = os.environ.copy()
+            env.pop('DB_PATH', None)
+            env.pop('API_PORT', None)
+            
+            # Start the backend process without any database
+            cmd = [sys.executable, "run_app_dynamic.py", "--port", str(BACKEND_PORT)]
+            # IMPORTANT: Do not PIPE stdout/stderr without consuming them; buffers can fill and block the child process.
+            # Redirect to DEVNULL to avoid hangs caused by heavy backend logging during long operations.
+            BACKEND_PROCESS = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env=env,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            )
+            
+            logger.info("Backend process started with PID %s", BACKEND_PROCESS.pid)
+            
+            # Wait for backend to be ready
+            for _ in range(20):  # 10 seconds timeout
+                try:
+                    response = requests.get(f"{API_BASE_URL}/health", timeout=1)
+                    if response.status_code == 200:
+                        logger.info("Backend started successfully on port %s", BACKEND_PORT)
+                        return True
+                except requests.exceptions.RequestException:
+                    time.sleep(0.5)
+            
+            logger.error("Backend failed to start within timeout")
+            return False
+        except Exception as e:
+            logger.error("Error starting backend: %s", e, exc_info=True)
+            return False
 
 def stop_backend():
-    """Stop the FastAPI backend process"""
+    """Stop the FastAPI backend (process or thread)"""
     global BACKEND_PROCESS
     
-    if BACKEND_PROCESS and BACKEND_PROCESS.poll() is None:
-        try:
-            BACKEND_PROCESS.terminate()
-            BACKEND_PROCESS.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            BACKEND_PROCESS.kill()
-        BACKEND_PROCESS = None
+    # Check if we're using thread-based backend
+    is_posit_connect = os.getenv('RSTUDIO_PRODUCT') == 'CONNECT' or os.getenv('RS_CONNECT_SERVER') is not None
+    
+    if is_posit_connect:
+        from core.utilities.backend_runner import stop_backend_thread
+        stop_backend_thread()
+    else:
+        # Stop subprocess backend
+        if BACKEND_PROCESS and BACKEND_PROCESS.poll() is None:
+            logger.info("Stopping backend process")
+            try:
+                BACKEND_PROCESS.terminate()
+                BACKEND_PROCESS.wait(timeout=5)
+                logger.info("Backend process terminated successfully")
+            except subprocess.TimeoutExpired:
+                logger.warning("Backend process did not terminate, forcing kill")
+                BACKEND_PROCESS.kill()
+            BACKEND_PROCESS = None
+        else:
+            logger.debug("No backend process to stop")
 
 def api_request(method, endpoint, **kwargs):
     """Make API request to backend"""
@@ -92,17 +128,22 @@ def api_request(method, endpoint, **kwargs):
         # Add default timeout if not specified
         if 'timeout' not in kwargs:
             kwargs['timeout'] = 30
-        response = requests.request(method, url, **kwargs)
+        logger.debug("Making %s request to %s", method, url)
+        response = requests.request(method, url, timeout=kwargs.get('timeout', 30), **{k: v for k, v in kwargs.items() if k != 'timeout'})
+        logger.debug("Response status: %s", response.status_code)
         return response
-    except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, requests.exceptions.Timeout):
+    except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, requests.exceptions.Timeout) as e:
+        logger.warning("API request failed: %s", e)
         return None
 
 @app.route('/')
 def home():
     """Home page"""
+    logger.debug("Home page requested")
     # Check if backend is running
     health_response = api_request('GET', '/health')
     backend_ready = health_response and health_response.status_code == 200
+    logger.debug("Backend ready: %s", backend_ready)
     
     # Don't load database info on startup - start clean
     db_info = None
@@ -112,9 +153,11 @@ def home():
 @app.route('/search')
 def search():
     """Search page"""
+    logger.debug("Search page requested")
     # Check if backend is running
     health_response = api_request('GET', '/health')
     if not health_response or health_response.status_code != 200:
+        logger.warning("Backend not available for search page")
         flash('Backend not available. Please check settings.', 'error')
         return redirect(url_for('settings'))
     
@@ -126,10 +169,13 @@ def search():
     
     # If no tables available, redirect to settings with a helpful message
     if not tables:
+        logger.info("No tables detected in database")
         flash('No tables detected in the current database. Please load a valid database in Settings.', 'error')
         return redirect(url_for('settings'))
     
     selected_table = tables[0].get('name', '') if tables else ''
+    tables_count = len(tables)
+    logger.debug("Search page loaded with %s tables", tables_count)
     return render_template('search.html', tables=tables, selected_table=selected_table)
 
 @app.route('/results')
@@ -138,7 +184,11 @@ def search_results():
     query = request.args.get('q', '')
     table = request.args.get('table', '')
     
+    logger.info("Search results requested - table: %s, query: %s", table, query)
+    
+
     if not table:
+        logger.warning("Search results requested without table")
         flash('Please select a table to search', 'error')
         return redirect(url_for('search'))
     
@@ -155,6 +205,7 @@ def search_results():
     search_response = api_request('GET', f'/search/{table}', params=search_params)
     
     if not search_response or search_response.status_code != 200:
+        logger.error("Search failed for table %s, query %s", table, query)
         flash('Search failed', 'error')
         return redirect(url_for('search'))
     
@@ -162,6 +213,8 @@ def search_results():
     search_hits = search_data.get('hits', [])
     total = search_data.get('total', 0)
     took = search_data.get('took', 0)
+    
+    logger.info("Search completed - %s results found in %sms", total, took)
     
     # Get table info for MGRS fields
     table_info = None
@@ -267,23 +320,20 @@ def create_database():
 def test_upload():
     """Test route to verify upload handling works"""
     try:
-        print(f"[TEST] Received test upload request")
-        print(f"[TEST] Form data keys: {list(request.form.keys())}")
-        print(f"[TEST] Files received: {len(request.files.getlist('files'))}")
+        logger.debug("Received test upload request")
+        form_keys = list(request.form.keys())
+        files_count = len(request.files.getlist('files'))
+        logger.debug("Form data keys: %s", form_keys)
+        logger.debug("Files received: %s", files_count)
         return jsonify({'success': True, 'message': 'Test upload successful'})
     except Exception as e:
-        print(f"[TEST] Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.error("Test upload error: %s", str(e), exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/select_folder', methods=['POST'])
 def select_folder():
     """Open native folder dialog and return the selected folder path"""
     try:
-        import subprocess
-        import sys
-
         # Run a small inline Python script to open the folder picker.
         # This avoids writing files inside the project directory, which was triggering the Flask reloader.
         inline_code = (
@@ -305,6 +355,7 @@ def select_folder():
                 capture_output=True,
                 text=True,
                 timeout=60,
+                check=False,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
             )
 
@@ -324,9 +375,7 @@ def select_folder():
             return jsonify({'success': False, 'error': str(e)})
             
     except Exception as e:
-        print(f"[FLASK] Error in select_folder: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.error("Error in select_folder: %s", str(e), exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)
@@ -336,14 +385,17 @@ def select_folder():
 def create_database_from_folder():
     """Handle database creation from uploaded folder"""
     try:
-        print(f"[FLASK] Received folder upload request")
-        print(f"[FLASK] Form data keys: {list(request.form.keys())}")
-        print(f"[FLASK] Files received: {len(request.files.getlist('files'))}")
+        logger.info("Received folder upload request")
+        form_keys = list(request.form.keys())
+        files_count = len(request.files.getlist('files'))
+        logger.debug("Form data keys: %s", form_keys)
+        logger.debug("Files received: %s", files_count)
         
         # Get form data
         db_name = request.form.get('db_name')
-        print(f"[FLASK] Database name: {db_name}")
+        logger.info("Database name: %s", db_name)
         if not db_name:
+            logger.warning("Database name missing in request")
             return jsonify({'success': False, 'error': 'Database name is required'}), 400
         
         # Get processing options
@@ -355,12 +407,14 @@ def create_database_from_folder():
         
         # Get folder path from form data
         folder_path = request.form.get('folder_path')
-        print(f"[FLASK] Folder path: {folder_path}")
+        logger.info("Folder path: %s", folder_path)
         if not folder_path:
+            logger.warning("Folder path missing in request")
             return jsonify({'success': False, 'error': 'Folder path is required'}), 400
         
         # Verify folder exists
         if not os.path.exists(folder_path):
+            logger.error("Folder does not exist: %s", folder_path)
             return jsonify({'success': False, 'error': f'Folder does not exist: {folder_path}'}), 400
         
         # Prepare options for backend
@@ -379,24 +433,26 @@ def create_database_from_folder():
             'options': json.dumps(options)
         }
         
-        print(f"[FLASK] Calling backend API with folder_path: {folder_path}")
-        print(f"[FLASK] Create data: {create_data}")
+        logger.info("Calling backend API with folder_path: %s", folder_path)
+        logger.debug("Create data: %s", create_data)
         
         # Check if backend is running first
-        print(f"[FLASK] Checking backend health...")
+        logger.debug("Checking backend health...")
         health_response = api_request('GET', '/health', timeout=5)
         if not health_response:
-            print(f"[FLASK] Backend health check failed")
+            logger.error("Backend health check failed")
             return jsonify({'success': False, 'error': 'Backend is not responding'}), 500
         
-        print(f"[FLASK] Backend health check passed, calling create-database...")
+        logger.info("Backend health check passed, calling create-database...")
         response = api_request('POST', '/create-database', json=create_data, timeout=300)  # 5 minute timeout
-        print(f"[FLASK] Backend response: {response.status_code if response else 'None'}")
+        response_status = response.status_code if response else 'None'
+        logger.info("Backend response: %s", response_status)
         
         if response and response.status_code == 200:
             result = response.json()
             if result.get('success'):
                 db_path = result.get('dbPath')
+                logger.info("Database created successfully: %s", db_path)
                 
                 # Switch to the new database
                 switch_data = {'dbPath': db_path}
@@ -408,14 +464,14 @@ def create_database_from_folder():
                     'dbPath': db_path
                 })
             else:
+                logger.error("Database creation failed: %s", result.get('error', 'Unknown error'))
                 return jsonify({'success': False, 'error': result.get('error', 'Unknown error')}), 500
         else:
+            logger.error("Backend API call failed")
             return jsonify({'success': False, 'error': 'Backend API call failed'}), 500
                 
     except Exception as e:
-        print(f"[FLASK] Error in create_database_from_folder: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.error("Error in create_database_from_folder: %s", str(e), exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/settings')
@@ -428,12 +484,16 @@ def upload_database():
     """Handle database upload"""
     global CURRENT_DB_FILE
     
+    logger.info("Database upload requested")
+    
     if 'database_file' not in request.files:
+        logger.warning("Database upload attempted without file")
         flash('No file selected', 'error')
         return redirect(url_for('settings'))
     
     file = request.files['database_file']
     if file.filename == '':
+        logger.warning("Database upload attempted with empty filename")
         flash('No file selected', 'error')
         return redirect(url_for('settings'))
     
@@ -450,6 +510,8 @@ def upload_database():
         file_path = os.path.join(uploads_dir, unique_filename)
         file.save(file_path)
         
+        logger.info("Database file saved: %s", file_path)
+        
         # Switch to uploaded database
         switch_data = {'dbPath': file_path}
         response = api_request('POST', '/switch-database', json=switch_data)
@@ -462,7 +524,10 @@ def upload_database():
                 try:
                     tables_list = tables_resp.json() or []
                     tables_ok = isinstance(tables_list, list) and len(tables_list) > 0
-                except Exception:
+                    tables_count = len(tables_list)
+                    logger.info("Database loaded with %s tables", tables_count)
+                except Exception as e:
+                    logger.error("Error parsing tables response: %s", e)
                     tables_ok = False
 
         if response and response.status_code == 200 and tables_ok:
@@ -470,20 +535,25 @@ def upload_database():
             if CURRENT_DB_FILE and os.path.exists(CURRENT_DB_FILE):
                 try:
                     os.remove(CURRENT_DB_FILE)
-                except OSError:
-                    pass
+                    logger.debug("Removed previous database file: %s", CURRENT_DB_FILE)
+                except OSError as e:
+                    logger.warning("Failed to remove previous database file: %s", e)
 
             # Update current database file
             CURRENT_DB_FILE = file_path
+            logger.info("Database successfully loaded: %s", filename)
             flash(f'Database loaded: {filename}', 'success')
         else:
+            logger.error("Failed to load database (no tables detected or switch failed)")
             flash('Failed to load database (no tables detected or switch failed)', 'error')
             # Clean up new file on failure
             try:
                 os.remove(file_path)
-            except OSError:
-                pass
+                logger.debug("Removed failed database file: %s", file_path)
+            except OSError as e:
+                logger.warning("Failed to remove failed database file: %s", e)
     else:
+        logger.warning("Invalid file type uploaded: %s", file.filename)
         flash('Invalid file type. Please upload a .db, .sqlite, or .sqlite3 file', 'error')
     
     return redirect(url_for('settings'))
@@ -572,10 +642,12 @@ def api_switch_database():
         return jsonify({'error': 'Failed to switch database'}), 500
 
 # Startup and shutdown handlers
-# Remove before_first_request as it's deprecated in newer Flask versions
+# Backend initialization is handled by app_wsgi.py for Posit Connect
+# For local development, backend starts in __main__ block below
 
 def signal_handler(signum, frame):  # pylint: disable=unused-argument
     """Handle shutdown signals"""
+    logger.info("Shutdown signal received")
     stop_backend()
     sys.exit(0)
 
@@ -586,7 +658,7 @@ if __name__ == '__main__':
     
     # Start backend
     if not start_backend():
-        print("Warning: Backend failed to start")
+        logger.warning("Backend failed to start")
     
     try:
         app.run(debug=True, host='127.0.0.1', port=5000)

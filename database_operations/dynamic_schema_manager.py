@@ -12,6 +12,10 @@ from enum import Enum
 import threading
 from datetime import datetime
 from .elasticsearch_query_parser import ElasticsearchQueryParser
+from core.utilities.logging_config import get_logger
+
+# Set up logging
+logger = get_logger('schema_manager')
 
 class FieldType(Enum):
     TEXT = "text"
@@ -118,9 +122,10 @@ class DynamicSchemaManager:
             self.conn.row_factory = sqlite3.Row
             self._analyze_schema()
             self._query_parser = ElasticsearchQueryParser(self)
+            logger.info("Successfully connected to database: %s", self.db_path)
             return True
         except (sqlite3.Error, OSError) as e:
-            print(f"Failed to connect to database: {e}")
+            logger.error("Failed to connect to database: %s", e, exc_info=True)
             return False
 
     def switch_database(self, new_db_path: str) -> bool:
@@ -136,9 +141,12 @@ class DynamicSchemaManager:
             self.tables = {}
             self._fts_tables = set()
             self._query_parser = None
-            return self.connect()
+            result = self.connect()
+            if result:
+                logger.info("Successfully switched to database: %s", new_db_path)
+            return result
         except Exception as e:
-            print(f"Failed to switch database: {e}")
+            logger.error("Failed to switch database: %s", e, exc_info=True)
             return False
 
     def _analyze_schema(self):
@@ -554,7 +562,7 @@ class DynamicSchemaManager:
                 where_conditions.append(f"({query_where})")
                 params.extend(query_params)
         except Exception as e:
-            print(f"Error parsing Elasticsearch query: {e}")
+            logger.warning("Error parsing Elasticsearch query: %s, falling back to simple text search", e)
             # Fallback to simple text search - use universal search (excluding classification fields)
             if isinstance(query, dict) and 'query' in query:
                 query_text = str(query['query'])
@@ -641,7 +649,7 @@ class DynamicSchemaManager:
                         where_conditions.append(f"({query_where})")
                         params.extend(query_params)
                 except Exception as e:
-                    print(f"Error parsing query in count: {e}")
+                    logger.warning("Error parsing query in count: %s", e)
         elif isinstance(query, str) and query != "*" and query.strip():
             # Fields to exclude from search entirely
             excluded_search_fields = {
@@ -922,7 +930,7 @@ class DynamicSchemaManager:
             return list(classification_values)[0].title()
             
         except Exception as e:
-            print(f"Error getting highest classification: {e}")
+            logger.error("Error getting highest classification: %s", e, exc_info=True)
             return "Unknown"
 
     def _calculate_facets(self, table_name: str, facet_fields: List[str], 
@@ -1012,7 +1020,7 @@ class DynamicSchemaManager:
                 return True
                 
         except (sqlite3.Error, OSError) as e:
-            print(f"Failed to create FTS index: {e}")
+            logger.error("Failed to create FTS index: %s", e, exc_info=True)
             return False
 
     def export_kmz(self, table_name: str, query: str = "*", 

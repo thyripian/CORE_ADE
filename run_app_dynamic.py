@@ -14,6 +14,10 @@ from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from database_operations.dynamic_schema_manager import DynamicSchemaManager
+from core.utilities.logging_config import get_logger
+
+# Set up logging
+logger = get_logger('fastapi_backend')
 
 class CreateDatabaseRequest(BaseModel):
     folderPath: str
@@ -23,31 +27,37 @@ class CreateDatabaseRequest(BaseModel):
 class SwitchDatabaseRequest(BaseModel):
     dbPath: str = None
 
-def main():
-    parser = argparse.ArgumentParser(description="CORE-Scout (Dynamic): Universal SQLite Explorer")
-    parser.add_argument("--db", "-d", required=False, help="Path to the SQLite database file")
-    # Default port comes from environment variable API_PORT if available
-    default_port = int(os.getenv('API_PORT', '8000'))
-    parser.add_argument("--port", "-p", type=int, default=default_port,
-                    help="Port to listen on (loopback only)")
-    args = parser.parse_args()
-    
-    print(f"[run_app_dynamic] Binding FastAPI to 127.0.0.1:{args.port}", flush=True)
+# Global schema manager (will be initialized when app is created)
+schema_manager = None
 
-    # Check for database path from command line args or environment variable
-    db_path = args.db or os.getenv('DB_PATH')
+def create_fastapi_app(db_path=None):
+    """
+    Create and configure FastAPI application
+    This function allows the app to be created without running it immediately
+    (useful for Posit Connect deployment where we run in a thread)
+    
+    Args:
+        db_path: Optional database path to load on startup
+    
+    Returns:
+        Configured FastAPI application instance
+    """
+    global schema_manager
+    
+    # Check for database path from parameter or environment variable
+    if not db_path:
+        db_path = os.getenv('DB_PATH')
     
     # Initialize schema manager (will be None initially)
-    global schema_manager
     schema_manager = None
     if db_path and os.path.exists(db_path):
-        print(f"[run_app_dynamic] Opening SQLite DB at: {db_path}", flush=True)
+        logger.info("Opening SQLite DB at: %s", db_path)
         schema_manager = DynamicSchemaManager(db_path)
         if not schema_manager.connect():
-            print(f"[run_app_dynamic] Warning: Failed to connect to database, starting without database", flush=True)
+            logger.warning("Failed to connect to database, starting without database")
             schema_manager = None
     else:
-        print(f"[run_app_dynamic] Starting without database - use /switch-database to load one", flush=True)
+        logger.info("Starting without database - use /switch-database to load one")
 
     app = FastAPI(
         title="CORE-Scout Dynamic API", 
@@ -66,13 +76,14 @@ def main():
     @app.get("/")
     def root():
         """Root endpoint with API information"""
-        schema_info = schema_manager.get_schema_info()
+        schema_info = schema_manager.get_schema_info() if schema_manager else {"total_tables": 0, "fts_available": False}
+        db_name = os.path.basename(schema_manager.db_path) if schema_manager and schema_manager.db_path else "None"
         return {
             "name": "CORE-Scout Dynamic API",
             "version": "2.0",
-            "database": os.path.basename(args.db),
-            "total_tables": schema_info['total_tables'],
-            "fts_available": schema_info['fts_available'],
+            "database": db_name,
+            "total_tables": schema_info.get('total_tables', 0),
+            "fts_available": schema_info.get('fts_available', False),
             "description": "Universal SQLite database explorer with Elasticsearch-like functionality"
         }
 
@@ -212,6 +223,7 @@ def main():
     ):
         """Simple search endpoint for backward compatibility"""
         try:
+            logger.debug("Search request - table: %s, query: %s, size: %s", table_name, q, size)
             if not schema_manager:
                 raise HTTPException(status_code=400, detail="No database loaded")
             
@@ -230,6 +242,8 @@ def main():
                 from_=from_
             )
             
+            logger.debug("Search completed - %s results found in %sms", result.total, result.took)
+            
             return {
                 'total': result.total,
                 'hits': result.hits,
@@ -238,10 +252,13 @@ def main():
             }
             
         except json.JSONDecodeError as e:
+            logger.error("Invalid JSON in search parameters: %s", e)
             raise HTTPException(status_code=400, detail=f"Invalid JSON in parameters: {e}") from e
         except ValueError as e:
+            logger.error("Value error in search: %s", e)
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
+            logger.error("Error in search: %s", str(e), exc_info=True)
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @app.get("/tables/{table_name}/records/{record_id}")
@@ -340,9 +357,9 @@ def main():
     def create_database_route(request: CreateDatabaseRequest):
         """Create a new database from files in a folder."""
         try:
-            print(f"[CREATE-DB] Starting database creation for folder: {request.folderPath}")
-            print(f"[CREATE-DB] Database name: {request.dbName}")
-            print(f"[CREATE-DB] Options: {request.options}")
+            logger.info("Starting database creation for folder: %s", request.folderPath)
+            logger.info("Database name: %s", request.dbName)
+            logger.debug("Options: %s", request.options)
             
             from database_operations.file_processor import FileProcessor
             from database_operations.sqlite_operations import SQLiteDatabase
@@ -352,9 +369,9 @@ def main():
             if request.options:
                 try:
                     processing_options = json.loads(request.options)
-                    print(f"[CREATE-DB] Parsed options: {processing_options}")
+                    logger.debug("Parsed options: %s", processing_options)
                 except Exception as e:
-                    print(f"[CREATE-DB] Error parsing options: {e}")
+                    logger.error("Error parsing options: %s", e)
                     processing_options = {}
             
             # Default options
@@ -369,15 +386,15 @@ def main():
             
             # Initialize file processor
             processor = FileProcessor()
-            print(f"[CREATE-DB] File processor initialized")
+            logger.debug("File processor initialized")
             
             # Scan folder for files
-            print(f"[CREATE-DB] Scanning folder: {request.folderPath}")
+            logger.info("Scanning folder: %s", request.folderPath)
             files = processor.scan_folder(request.folderPath, processing_options)
-            print(f"[CREATE-DB] Found {len(files)} files to process")
+            logger.info("Found %s files to process", len(files))
             
             if not files:
-                print(f"[CREATE-DB] No supported files found in folder: {request.folderPath}")
+                logger.warning("No supported files found in folder: %s", request.folderPath)
                 raise HTTPException(status_code=400, detail="No supported files found in the specified folder")
             
             # Create new database path in Downloads folder
@@ -386,10 +403,10 @@ def main():
             # Ensure Downloads folder exists
             if not os.path.exists(downloads_path):
                 os.makedirs(downloads_path, exist_ok=True)
-                print(f"[CREATE-DB] Created Downloads folder: {downloads_path}")
+                logger.debug("Created Downloads folder: %s", downloads_path)
             
             db_path = os.path.join(downloads_path, request.dbName)
-            print(f"[CREATE-DB] Saving database to: {db_path}")
+            logger.info("Saving database to: %s", db_path)
             
             # Create new database with basic schema
             new_db = SQLiteDatabase(db_path)
@@ -439,14 +456,14 @@ def main():
                     processed_count += 1
                     
                 except Exception as e:
-                    print(f"Error processing {file_path}: {str(e)}")
+                    logger.error("Error processing %s: %s", file_path, str(e), exc_info=True)
                     continue
             
             new_db.conn.commit()
             new_db.conn.close()
             
-            print(f"[CREATE-DB] Database created at: {db_path}")
-            print(f"[CREATE-DB] Files processed: {processed_count}/{len(files)}")
+            logger.info("Database created at: %s", db_path)
+            logger.info("Files processed: %s/%s", processed_count, len(files))
             
             return {
                 "success": True,
@@ -459,6 +476,7 @@ def main():
             }
             
         except Exception as e:
+            logger.error("Error creating database: %s", str(e), exc_info=True)
             raise HTTPException(status_code=500, detail=str(e))
 
     @app.post("/switch-database")
@@ -478,9 +496,10 @@ def main():
                 schema_manager = DynamicSchemaManager(db_path)
                 success = schema_manager.connect()
             
-            print(f"[SWITCH-DB] Switched to database: {db_path}, success: {success}")
+            logger.info("Switched to database: %s, success: %s", db_path, success)
             
             if not success:
+                logger.error("Failed to switch database")
                 raise HTTPException(status_code=500, detail="Failed to switch database")
             
             return {
@@ -551,6 +570,24 @@ def main():
         if schema_manager:
             schema_manager.close()
     
+    return app
+
+def main():
+    """Main entry point for standalone execution"""
+    parser = argparse.ArgumentParser(description="CORE-Scout (Dynamic): Universal SQLite Explorer")
+    parser.add_argument("--db", "-d", required=False, help="Path to the SQLite database file")
+    # Default port comes from environment variable API_PORT if available
+    default_port = int(os.getenv('API_PORT', '8000'))
+    parser.add_argument("--port", "-p", type=int, default=default_port,
+                    help="Port to listen on (loopback only)")
+    args = parser.parse_args()
+    
+    logger.info("Binding FastAPI to 127.0.0.1:%s", args.port)
+    
+    # Create the app
+    app = create_fastapi_app(db_path=args.db)
+    
+    # Run with uvicorn
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=args.port)
 

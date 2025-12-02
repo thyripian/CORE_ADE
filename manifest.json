@@ -1,0 +1,20 @@
+{
+    "version": 1,
+    "metadata": {
+        "appmode": "python-shiny",
+        "primary_rmd": null,
+        "primary_html": null,
+        "content_category": "api",
+        "has_parameters": false
+    },
+    "python": {
+        "package_manager": "pip",
+        "package_file": "requirements.txt",
+        "python_version": "3.9"
+    },
+    "files": {
+        "app_wsgi.py": {
+            "checksum": "auto"
+        }
+    }
+}

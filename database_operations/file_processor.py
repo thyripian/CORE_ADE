@@ -7,6 +7,10 @@ import mimetypes
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
+from core.utilities.logging_config import get_logger
+
+# Set up logging
+logger = get_logger('file_processor')
 
 class FileProcessor:
     """Process various file types and extract metadata and content"""
@@ -258,7 +262,7 @@ class FileProcessor:
             self.stats['total_size'] += data.get('file_size', 0)
             
         except Exception as e:
-            print(f"Error processing {file_path}: {str(e)}")
+            logger.error("Error processing %s: %s", file_path, str(e), exc_info=True)
             result['full_text'] = f"Error processing file: {str(e)}"
             self.stats['files_failed'] += 1
         

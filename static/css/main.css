@@ -716,7 +716,7 @@ nav a:hover {
 .progress-section {
     margin-top: 30px;
     padding: 20px;
-    background-color: #f8f9fa;
+    background-color: rgba(0, 0, 0, 0.6);
     border-radius: 8px;
     border: 1px solid #dee2e6;
 }
@@ -724,7 +724,7 @@ nav a:hover {
 .progress-bar {
     width: 100%;
     height: 20px;
-    background-color: #e9ecef;
+    background-color: rgba(0, 0, 0, 0.6);
     border-radius: 10px;
     overflow: hidden;
     margin: 10px 0;
@@ -747,7 +747,7 @@ nav a:hover {
 .status-messages {
     max-height: 200px;
     overflow-y: auto;
-    background-color: white;
+    background-color: rgba(0, 0, 0, 0.6);
     padding: 10px;
     border-radius: 5px;
     border: 1px solid #dee2e6;
